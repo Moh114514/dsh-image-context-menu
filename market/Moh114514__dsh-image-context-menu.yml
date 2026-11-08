@@ -1,0 +1,7 @@
+url: https://github.com/Moh114514/dsh-image-context-menu
+name: Moh114514/dsh-image-context-menu
+category: ui
+description:
+  en: Adds original-image context menus to Codex-generated images in DeepSeek Harness.
+  zh: 为 DeepSeek Harness 中 Codex 生成的图片提供原图右键菜单。
+tarball: https://github.com/Moh114514/dsh-image-context-menu/releases/download/v0.1.0/dsh-image-context-menu-0.1.0.tgz

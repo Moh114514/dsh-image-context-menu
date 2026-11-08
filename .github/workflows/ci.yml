@@ -1,0 +1,20 @@
+name: Check plugin
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/build.mjs
+      - run: node --test --test-isolation=none test/*.test.mjs
+      - run: node scripts/check-package.mjs
+      - run: mkdir -p dist && npm pack --ignore-scripts --pack-destination dist
+      - run: node scripts/verify-tarball.mjs dist/dsh-image-context-menu-0.1.0.tgz

@@ -1,0 +1,16 @@
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const pkg = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+const core = await readFile(resolve(root, 'src/core.js'), 'utf8');
+let client = await readFile(resolve(root, 'src/client.js'), 'utf8');
+client = client.replace(/^import .*;\r?\n/gm, '');
+if (/^import\s/m.test(client)) throw new Error('Unknown browser import: update the explicit build wrapper');
+const stripExports = source => source.replace(/^export (?=(?:async )?function |class |const )/gm, '');
+const banner = `// ${pkg.name} ${pkg.version} — MIT; see THIRD_PARTY_NOTICES.md\n`;
+const bundle = `${banner}window.__ModuleLoader__.load({\n  id: ${JSON.stringify(pkg.name)},\n  factory: (require) => {\n    'use strict';\n    const React = require('react');\n    const { jsx } = require('react/jsx-runtime');\n${stripExports(core)}\n${stripExports(client)}\n    return { apply, inject };\n  }\n});\n`;
+await mkdir(resolve(root, 'lib'), { recursive: true });
+await writeFile(resolve(root, 'lib/client.js'), bundle);
+await writeFile(resolve(root, 'lib/index.js'), `${banner}// UI-only companion; no host filesystem or account access.\nexport function apply() {}\n`);
+console.log(`Built ${pkg.name}@${pkg.version}: ${Buffer.byteLength(bundle)} browser bytes`);

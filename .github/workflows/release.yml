@@ -1,0 +1,39 @@
+name: Publish release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version (must match package.json)
+        required: true
+        default: '0.1.0'
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+concurrency:
+  group: image-context-menu-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check requested version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          node --input-type=module -e "import fs from 'node:fs';const v=JSON.parse(fs.readFileSync('package.json','utf8')).version;const expected=process.env.GITHUB_EVENT_NAME==='workflow_dispatch'?process.env.REQUESTED:process.env.GITHUB_REF_NAME.slice(1);if(v!==expected||!/^\d+\.\d+\.\d+$/.test(v))throw Error('Version mismatch');fs.appendFileSync(process.env.GITHUB_ENV,'VERSION='+v+'\n');"
+      - run: node scripts/build.mjs
+      - run: node --test --test-isolation=none test/*.test.mjs
+      - run: node scripts/check-package.mjs
+      - run: mkdir -p dist && npm pack --ignore-scripts --pack-destination dist
+      - name: Verify archive and generate checksum
+        run: node scripts/verify-tarball.mjs "dist/dsh-image-context-menu-${VERSION}.tgz"
+      - name: Publish prebuilt archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${VERSION}" "dist/dsh-image-context-menu-${VERSION}.tgz" dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Image Context Menu ${VERSION}" --generate-notes

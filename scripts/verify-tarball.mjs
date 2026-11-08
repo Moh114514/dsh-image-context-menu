@@ -1,0 +1,32 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
+import { basename, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+const file = process.argv[2];
+if (!file) throw new Error('Usage: node scripts/verify-tarball.mjs dist/package.tgz');
+const compressed = await readFile(file);
+const tar = gunzipSync(compressed, { maxOutputLength: 1024 * 1024 });
+const expected = new Set(['package/package.json','package/lib/index.js','package/lib/client.js','package/cordis.patch.yml','package/icon.svg','package/README.md','package/README.zh.md','package/PUBLISHING.md','package/LICENSE','package/THIRD_PARTY_NOTICES.md','package/CHANGELOG.md','package/locale/zh.json','package/locale/en.json']);
+const seen = new Set();
+for (let offset = 0; offset + 512 <= tar.length;) {
+  const header = tar.subarray(offset, offset + 512);
+  if (header.every(byte => byte === 0)) break;
+  const field = (start, length) => header.subarray(start, start + length).toString('utf8').replace(/\0.*$/su, '');
+  const prefix = field(345, 155), name = (prefix ? prefix + '/' : '') + field(0, 100);
+  const size = parseInt(field(124, 12).trim(), 8);
+  const type = field(156, 1);
+  if (!Number.isSafeInteger(size) || size < 0 || offset + 512 + size > tar.length) throw new Error('Invalid archive size');
+  if (type !== '' && type !== '0' || !expected.has(name) || seen.has(name)) throw new Error('Unexpected archive entry: ' + name);
+  const content = tar.subarray(offset + 512, offset + 512 + size);
+  const original = await readFile(resolve(name.slice('package/'.length)));
+  const identical = name === 'package/package.json' ? isDeepStrictEqual(JSON.parse(content.toString('utf8')), JSON.parse(original.toString('utf8'))) : content.equals(original);
+  if (!identical) throw new Error('Archive content differs from checked source: ' + name);
+  seen.add(name);
+  offset += 512 + Math.ceil(size / 512) * 512;
+}
+if (seen.size !== expected.size) throw new Error('Missing required release files');
+const hash = createHash('sha256').update(compressed).digest('hex');
+await writeFile(resolve(file, '..', 'SHA256SUMS.txt'), `${hash}  ${basename(file)}\n`);
+console.log(`Verified ${seen.size} allowlisted files; no profile, image, log, build script or credential files in the install archive.`);
+console.log(`SHA-256 ${hash}`);
