@@ -8,10 +8,12 @@ on:
         default: '0.1.0'
   push:
     tags: ['v*']
+    branches: [main]
+    paths: ['package.json', '.github/workflows/release.yml']
 permissions:
   contents: write
 concurrency:
-  group: image-context-menu-release-${{ github.ref }}
+  group: image-context-menu-release
   cancel-in-progress: false
 jobs:
   release:
@@ -25,14 +27,25 @@ jobs:
         env:
           REQUESTED: ${{ inputs.version }}
         run: |
-          node --input-type=module -e "import fs from 'node:fs';const v=JSON.parse(fs.readFileSync('package.json','utf8')).version;const expected=process.env.GITHUB_EVENT_NAME==='workflow_dispatch'?process.env.REQUESTED:process.env.GITHUB_REF_NAME.slice(1);if(v!==expected||!/^\d+\.\d+\.\d+$/.test(v))throw Error('Version mismatch');fs.appendFileSync(process.env.GITHUB_ENV,'VERSION='+v+'\n');"
+          node --input-type=module -e "import fs from 'node:fs';const v=JSON.parse(fs.readFileSync('package.json','utf8')).version;const expected=process.env.GITHUB_EVENT_NAME==='workflow_dispatch'?process.env.REQUESTED:process.env.GITHUB_REF_TYPE==='tag'?process.env.GITHUB_REF_NAME.slice(1):v;if(v!==expected||!/^\d+\.\d+\.\d+$/.test(v))throw Error('Version mismatch');fs.appendFileSync(process.env.GITHUB_ENV,'VERSION='+v+'\n');"
       - run: node scripts/build.mjs
       - run: node --test --test-isolation=none test/*.test.mjs
       - run: node scripts/check-package.mjs
       - run: mkdir -p dist && npm pack --ignore-scripts --pack-destination dist
       - name: Verify archive and generate checksum
         run: node scripts/verify-tarball.mjs "dist/dsh-image-context-menu-${VERSION}.tgz"
+      - name: Check whether this version is already released
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'published=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'published=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish prebuilt archive
+        if: steps.existing.outputs.published != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
