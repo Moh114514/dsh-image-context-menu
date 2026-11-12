@@ -12,6 +12,12 @@
 
 独立安装，不覆盖 `dsh-codex-subscription` 文件；通过 Harness Slots 包装原有图片组件，保留其点击预览、编辑、标注和图库操作。不读取 React 私有数据，不替换应用根节点，不增加模型工具。
 
+## 截图
+
+![Codex 生成图片上的五项右键菜单](assets/screenshot-context-menu.zh.png)
+
+在 DeepSeek Harness 0.2.2-rc.1 + dsh-codex-subscription 3.2.10 上的真实截图：在生成图片上右键即出现上述五项操作。菜单文案来自本插件自己的中文语言包。市场详情页读取仓库根目录的 [`screenshots.json`](screenshots.json)，其中指向这张图。
+
 ## 兼容范围与限制
 
 已针对 **DeepSeek Harness 0.2.2-rc.1** 与 **dsh-codex-subscription 3.2.6、3.2.7、3.2.11** 验证。安装清单声明的是兼容范围而非单一版本：`engines.dsh` 为 `>=0.2.2-rc.1 <0.2.3-0`，上游 peer 为 `>=3.2.6 <3.3.0`。适配依赖该版本的图片元数据、组件席位及查看器结构，并非上游正式承诺的稳定图片扩展 API。上游小版本（3.3.x）或宿主小版本（0.2.3）变化时需要重新做适配测试才能放宽范围；不要为了安装而绕过版本检查。可用 `node scripts/check-codex-contract.mjs <dsh-codex-subscription 目录>` 复查本适配依赖的席位键、查看器类名与分块协议。

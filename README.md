@@ -12,6 +12,13 @@ Adds these five actions to **Codex-generated images**:
 
 It wraps the existing generated-image cards and enhanced viewer through Harness Slots. It does **not** overwrite the Codex subscription plugin, inspect React internals, replace the app root, add model tools, or access account credentials. Existing click-to-view, editing, annotation and gallery controls remain upstream-owned.
 
+## Screenshot
+
+![The five-item menu on a Codex-generated image](assets/screenshot-context-menu.zh.png)
+
+Real capture on DeepSeek Harness 0.2.2-rc.1 with dsh-codex-subscription 3.2.10: right-clicking a generated image opens the five actions, in the order listed above. The Chinese UI labels come from this plugin's own locale bundle. The storefront listing reads [`screenshots.json`](screenshots.json), which points at the image in this repository.
+
+
 ## Compatibility
 
 The adapter is verified against **DeepSeek Harness 0.2.2-rc.1** and **dsh-codex-subscription 3.2.6, 3.2.7 and 3.2.11**. The manifest declares the compatible ranges instead of one pinned release: `engines.dsh` is `>=0.2.2-rc.1 <0.2.3-0` and the upstream peer is `>=3.2.6 <3.3.0`. This is a version-specific companion, not an official stable Codex extension API. A new upstream minor (3.3.x) or host minor (0.2.3) needs fresh adapter tests before the ranges move; do not bypass the version checks just to install a newer host or a newer upstream. `node scripts/check-codex-contract.mjs <path-to-dsh-codex-subscription>` re-checks the slot keys, viewer classes and chunk RPC the adapter depends on.

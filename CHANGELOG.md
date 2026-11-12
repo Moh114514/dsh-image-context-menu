@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Declare a storefront screenshot in `screenshots.json` and show it in both READMEs: a real capture of the five-item menu on Harness 0.2.2-rc.1 with dsh-codex-subscription 3.2.10. No code change, so no new release.
+- `scripts/check-package.mjs` now validates that file (1-8 entries, relative PNG/JPEG/WebP paths that exist and are non-empty).
+
 ## 0.1.2
 
 - Re-check the adapter against `dsh-codex-subscription` **3.2.11** (current latest): the card slot key, tool-view key, viewer overlay id, `dcsiv-*` classes and the `image/original/chunk` payload are unchanged from 3.2.6/3.2.7.

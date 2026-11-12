@@ -21,6 +21,7 @@ The installed community market reads the [awesome-dsh-plugin catalog](https://gi
 - Fork the catalog, add only `data/plugins/Moh114514__dsh-image-context-menu.yml`, and submit a PR to `main`.
 - The proposed entry is under `market/` in this repository. Its `tarball` URL is valid only **after** the matching Release exists.
 - Do not edit the catalog's generated README files.
+- Storefront screenshots live in **this** repository, not in the catalog: keep `screenshots.json` next to `package.json` and point it at real captures (1-8 PNG/JPEG/WebP paths relative to that file). `check-package.mjs` fails on a missing or absolute path. Updating screenshots needs only a push to `main` — no new release and no catalog PR.
 - Passing CI is not approval; a catalog maintainer reviews the implementation. Submission, release publication and market listing are different states, and no listing time is guaranteed.
 
 该仓库刚创建时，不能声称已经上架：应先完成公开发行，满一天后按目录规则提交收录 PR，等待 CI 与维护者审核。不要为了绕过仓库年龄限制修改其他条目或伪造创建时间。

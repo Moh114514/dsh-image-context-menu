@@ -42,7 +42,20 @@ expect(browser.includes("require('react')") && browser.includes("require('react/
 const zh = JSON.parse(await read('locale/zh.json')), en = JSON.parse(await read('locale/en.json'));
 expect(zh.meta?.title && zh.meta?.description && en.meta?.title && en.meta?.description, 'Missing bilingual market metadata');
 expect((await read('cordis.patch.yml')).includes('name: ' + pkg.name), 'Bundle patch package mismatch');
+// Storefront screenshots are declared in this repository (1-8 images, paths
+// relative to screenshots.json) and read from the repository, so a wrong path
+// has to fail here rather than rot in the market listing.
+const shots = JSON.parse(await read('screenshots.json'));
+const list = Array.isArray(shots) ? shots : shots?.screenshots;
+expect(Array.isArray(list) && list.length >= 1 && list.length <= 8, 'screenshots.json must list 1-8 images');
+for (const shot of list) {
+  expect(typeof shot === 'string' && /\.(?:png|jpe?g|webp)$/iu.test(shot), 'Screenshot must be a PNG/JPEG/WebP path: ' + shot);
+  expect(!shot.startsWith('/') && !/^[a-z]+:/iu.test(shot), 'Screenshot must be a repository-relative path: ' + shot);
+  const bytes = await readFile(resolve(root, shot));
+  expect(bytes.length > 0, 'Empty screenshot: ' + shot);
+}
 await mkdir(resolve(root, 'dist'), { recursive: true });
 console.log('Publication allowlist:', files.join(', '));
+console.log('Screenshots:', list.join(', '));
 console.log('Browser SHA-256:', createHash('sha256').update(browser).digest('hex'));
 console.log('Package checks passed; no local images, profile data or credential files are on the release allowlist.');
