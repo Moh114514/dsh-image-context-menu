@@ -17,4 +17,7 @@ jobs:
       - run: node --test --test-isolation=none test/*.test.mjs
       - run: node scripts/check-package.mjs
       - run: mkdir -p dist && npm pack --ignore-scripts --pack-destination dist
-      - run: node scripts/verify-tarball.mjs dist/dsh-image-context-menu-0.1.0.tgz
+      - name: Verify archive
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/verify-tarball.mjs "dist/dsh-image-context-menu-${VERSION}.tgz"
