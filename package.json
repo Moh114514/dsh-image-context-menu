@@ -1,6 +1,6 @@
 {
   "name": "dsh-image-context-menu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Original-image context menus for Codex-generated images in DeepSeek Harness.",
   "type": "module",
   "license": "MIT",

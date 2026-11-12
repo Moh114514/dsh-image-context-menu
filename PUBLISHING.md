@@ -4,11 +4,11 @@ Approved publication identity: **Moh114514**, repository **Moh114514/dsh-image-c
 
 ## Release checklist
 
-1. Build and run the tests and package checks from the README.
+1. Build and run the tests and package checks from the README, and run `node scripts/check-codex-contract.mjs <dsh-codex-subscription dir>` against the upstream release you intend to claim.
 2. Inspect `npm pack --dry-run --ignore-scripts` before packing. Never include local profile files, accounts, credentials, generated user images, conversation logs or machine paths.
 3. Commit the source, tests and matching built `lib` artifacts.
-4. In GitHub Actions run **Publish release** with `version: 0.1.1`. It checks the version, tests, builds and packs, then publishes `v0.1.1` with the prebuilt archive and SHA-256 checksum. It uses only the repository-scoped `GITHUB_TOKEN` with `contents: write`; no personal token or npm login is needed.
-5. Verify the release asset can be downloaded and installed before requesting market inclusion. The workflow can also be triggered by pushing the matching `v0.1.1` tag.
+4. In GitHub Actions run **Publish release** with `version: 0.1.2`. It checks the version, tests, builds and packs, then publishes `v0.1.2` with the prebuilt archive and SHA-256 checksum. It uses only the repository-scoped `GITHUB_TOKEN` with `contents: write`; no personal token or npm login is needed.
+5. Verify the release asset can be downloaded and installed before requesting market inclusion. The workflow can also be triggered by pushing the matching `v0.1.2` tag.
 
 There are no install-time build hooks. The custom build script only combines this repository's browser-safe modules into the Harness lazy-factory format, importing React from the existing client module table.
 

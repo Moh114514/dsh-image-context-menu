@@ -14,7 +14,7 @@ It wraps the existing generated-image cards and enhanced viewer through Harness 
 
 ## Compatibility
 
-The adapter is verified against **DeepSeek Harness 0.2.2-rc.1** and **dsh-codex-subscription 3.2.6 and 3.2.7**. The manifest declares the compatible ranges instead of one pinned release: `engines.dsh` is `>=0.2.2-rc.1 <0.2.3-0` and the upstream peer is `>=3.2.6 <3.3.0`. This is a version-specific companion, not an official stable Codex extension API. A new upstream minor (3.3.x) or host minor (0.2.3) needs fresh adapter tests before the ranges move; do not bypass the version checks just to install a newer host or a newer upstream.
+The adapter is verified against **DeepSeek Harness 0.2.2-rc.1** and **dsh-codex-subscription 3.2.6, 3.2.7 and 3.2.11**. The manifest declares the compatible ranges instead of one pinned release: `engines.dsh` is `>=0.2.2-rc.1 <0.2.3-0` and the upstream peer is `>=3.2.6 <3.3.0`. This is a version-specific companion, not an official stable Codex extension API. A new upstream minor (3.3.x) or host minor (0.2.3) needs fresh adapter tests before the ranges move; do not bypass the version checks just to install a newer host or a newer upstream. `node scripts/check-codex-contract.mjs <path-to-dsh-codex-subscription>` re-checks the slot keys, viewer classes and chunk RPC the adapter depends on.
 
 - Covers generated-image cards and Codex's **enhanced** image viewer, not every image in the application.
 - If the enhanced viewer is disabled, the generated card still has a menu, but the alternative native viewer is outside this adapter.
@@ -28,7 +28,7 @@ The adapter is verified against **DeepSeek Harness 0.2.2-rc.1** and **dsh-codex-
 Install and enable the compatible upstream **dsh-codex-subscription** plugin first. Download the `.tgz` from this repository's **Releases** and use Harness's plugin installation flow, or run:
 
 ```sh
-dsh plugin add ./dsh-image-context-menu-0.1.1.tgz
+dsh plugin add ./dsh-image-context-menu-0.1.2.tgz
 ```
 
 Restart the desktop application fully if its current frontend bundle is cached. Installing this companion does not restore any previously hand-patched upstream files; for a clean migration, reinstall the same upstream release through your normal plugin manager and then install this companion. Keep backups until migration is verified.

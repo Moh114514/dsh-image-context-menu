@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Re-check the adapter against `dsh-codex-subscription` **3.2.11** (current latest): the card slot key, tool-view key, viewer overlay id, `dcsiv-*` classes and the `image/original/chunk` payload are unchanged from 3.2.6/3.2.7.
+- Add `scripts/check-codex-contract.mjs`, which verifies those slot keys, viewer classes, chunk size and asset-id pattern against any installed upstream build, and cross-checks them with `src/core.js`.
+- No adapter logic changes; the declared ranges stay `engines.dsh >=0.2.2-rc.1 <0.2.3-0` and peer `dsh-codex-subscription >=3.2.6 <3.3.0`.
+
 ## 0.1.1
 
 - Track dsh-codex-subscription 3.2.7: the injected card, tool-row and viewer surfaces are unchanged from 3.2.6, so the adapter code is untouched.
