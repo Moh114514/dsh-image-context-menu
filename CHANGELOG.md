@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Track dsh-codex-subscription 3.2.7: the injected card, tool-row and viewer surfaces are unchanged from 3.2.6, so the adapter code is untouched.
+- Declare an explicit range instead of one pinned release: `dsh-codex-subscription >=3.2.6 <3.3.0`.
+- Replace the exact `engines.dsh` pin with `>=0.2.2-rc.1 <0.2.3-0`, which keeps prerelease hosts installable and admits the 0.2.2 stable line.
+- State ranges rather than a single version in the README, the publishing notes and the bilingual market metadata.
+
 ## 0.1.0
 
 - Independent companion plugin; does not overwrite installed plugin files.

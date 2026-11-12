@@ -6,11 +6,21 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => readFile(resolve(root, name), 'utf8');
 const pkg = JSON.parse(await read('package.json'));
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
-expect(pkg.name === 'dsh-image-context-menu' && pkg.version === '0.1.0', 'Unexpected package identity');
+expect(pkg.name === 'dsh-image-context-menu' && pkg.version === '0.1.1', 'Unexpected package identity');
 expect(pkg.private !== true && pkg.license === 'MIT', 'Publication manifest is not public MIT');
 expect(pkg.dsh?.bundle?.patch === './cordis.patch.yml', 'Missing installable bundle patch');
 expect(pkg.exports?.['./client'] === './lib/client.js', 'Missing built browser export');
-expect(pkg.engines?.dsh === '0.2.2-rc.1' && pkg.peerDependencies?.['dsh-codex-subscription'] === '3.2.6', 'Compatibility must remain explicitly tested');
+expect(pkg.engines?.dsh === '>=0.2.2-rc.1 <0.2.3-0', 'Host range must stay on the release line the adapter was tested against');
+expect(pkg.peerDependencies?.['dsh-codex-subscription'] === '>=3.2.6 <3.3.0', 'Upstream compatibility must stay explicitly tested');
+for (const [name, range] of Object.entries(pkg.peerDependencies ?? {})) {
+  // Only the lockstep DSH release line is prerelease-shaped; cordis and
+  // schemastery keep their own stable lines.
+  if (!/^@deepseek-ai\/dsh(?:-|$)/u.test(name)) continue;
+  // A host peer range without a prerelease branch silently excludes every
+  // prerelease host, which is what every shipped DSH line is.
+  const declared = typeof range === 'string' ? range : '';
+  expect(declared !== '' && (declared.includes('-rc.') || declared.includes('-0')), 'Host peer range needs an explicit prerelease branch: ' + name);
+}
 for (const name of ['preinstall','install','postinstall','prepare','prepack']) expect(!pkg.scripts?.[name], 'Install/pack must not execute build hooks');
 expect(!pkg.dependencies, 'No host, React or upstream implementation may be bundled as a dependency');
 const files = ['package.json', 'lib/index.js', 'lib/client.js', 'cordis.patch.yml', 'icon.svg', 'README.md', 'README.zh.md', 'PUBLISHING.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md'];

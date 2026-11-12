@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "图片右键菜单",
-    "description": "为 Codex 生成的图片提供新标签页打开、添加到聊天、复制原图、显示文件位置和下载副本。需要 dsh-codex-subscription 3.2.6。"
+    "description": "为 Codex 生成的图片提供新标签页打开、添加到聊天、复制原图、显示文件位置和下载副本。需要 dsh-codex-subscription 3.2.6 及后续 3.2.x 版本。"
   }
 }

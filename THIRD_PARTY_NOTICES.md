@@ -1,6 +1,6 @@
 # Third-party notices
 
-The original-image chunk protocol verification and composer lifecycle integration are adapted from [dsh-codex-subscription](https://github.com/WSL043/dsh-codex-subscription), version 3.2.6, by WSL043. This package is an independently maintained companion, not an official DeepSeek or upstream Codex subscription release. It does not redistribute the upstream plugin, React or the Harness runtime.
+The original-image chunk protocol verification and composer lifecycle integration are adapted from [dsh-codex-subscription](https://github.com/WSL043/dsh-codex-subscription), versions 3.2.6 and 3.2.7, by WSL043. This package is an independently maintained companion, not an official DeepSeek or upstream Codex subscription release. It does not redistribute the upstream plugin, React or the Harness runtime.
 
 Upstream license:
 
