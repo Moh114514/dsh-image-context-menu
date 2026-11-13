@@ -116,6 +116,63 @@ export async function readOriginal(rpc, sessionId, original, { signal } = {}) {
   return data;
 }
 
+/** User-sent images arrive as durable attachment references, not Codex originals. */
+const MEDIA_TYPE = /^image\/[a-z0-9.+-]{1,64}$/u;
+const MAX_IMAGE_BYTES = 48 * 1024 * 1024;
+
+/** Accept only a complete, self-consistent durable image reference for one session. */
+export function decodeUserImage(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !validSession(value.sessionId)) return undefined;
+  const attachment = value.attachment;
+  if (!attachment || typeof attachment !== 'object' || Array.isArray(attachment)) return undefined;
+  const { attachmentId, mediaType } = attachment;
+  if (!validAttachmentId(attachmentId) || !/[^\\u0000-\\u001f\\u007f]/u.test(attachmentId)) return undefined;
+  if (typeof mediaType !== 'string' || !MEDIA_TYPE.test(mediaType)) return undefined;
+  if (!positiveInteger(attachment.bytes) || attachment.bytes > MAX_IMAGE_BYTES) return undefined;
+  if (!positiveInteger(attachment.width) || !positiveInteger(attachment.height)) return undefined;
+  if (attachment.width * attachment.height > 2 ** 27) return undefined;
+  const name = typeof attachment.name === 'string' && NAME.test(attachment.name) ? attachment.name : undefined;
+  return { sessionId: value.sessionId, attachment: {
+    attachmentId, mediaType, bytes: attachment.bytes, width: attachment.width, height: attachment.height,
+    ...name === undefined ? {} : { name },
+  } };
+}
+
+/**
+ * Read one durable attachment through the Session gateway, verifying the reference,
+ * the announced byte length and (when the id is a digest) the stored object digest.
+ * @param remoteSession - `ctx.remote.session` with the `attachment` operation.
+ * @param sessionId - Session that owns the attachment permission scope.
+ * @param image - `{ attachment }` reference taken from rendered chat images.
+ * @param options - optional abort signal.
+ */
+export async function readUserImage(remoteSession, sessionId, image, { signal } = {}) {
+  const ref = decodeUserImage({ sessionId, attachment: image?.attachment });
+  if (!ref || typeof remoteSession?.attachment !== 'function') throw new Error('Invalid image request');
+  signal?.throwIfAborted();
+  const result = await remoteSession.attachment({ sessionId: ref.sessionId, attachment: ref.attachment });
+  signal?.throwIfAborted();
+  if (result?.ok !== true) throw new Error('Image is unavailable');
+  const value = result.value;
+  if (!value || typeof value.data !== 'string' || value.attachment?.attachmentId !== ref.attachment.attachmentId) {
+    throw new Error('Image metadata changed');
+  }
+  let binary;
+  try { binary = atob(value.data); } catch { throw new Error('Invalid image payload'); }
+  if (binary.length !== ref.attachment.bytes) throw new Error('Image integrity check failed');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const digest = ref.attachment.attachmentId.startsWith('sha256:') ? ref.attachment.attachmentId.slice(7) : undefined;
+  if (digest !== undefined && SHA256.test(digest)) {
+    const actual = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    if ([...new Uint8Array(actual)].map(byte => byte.toString(16).padStart(2, '0')).join('') !== digest) {
+      throw new Error('Image integrity check failed');
+    }
+  }
+  signal?.throwIfAborted();
+  return { bytes, attachment: ref.attachment };
+}
+
 export class Catalog {
   #owners = new Map();
 

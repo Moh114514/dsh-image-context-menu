@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { jsx } from 'react/jsx-runtime';
-import { Catalog, collectGeneratedItems, decodeOriginal, localPathFromBlock, readOriginal, matchViewerImage } from './core.js';
+import { Catalog, collectGeneratedItems, decodeOriginal, decodeUserImage, localPathFromBlock, readOriginal, readUserImage, matchViewerImage } from './core.js';
 
 const ID = 'dsh-image-context-menu';
 const MENU = `${ID}.original`;
@@ -9,6 +9,12 @@ const SPECS = [
   { name: 'conversation.chat.node', key: 'codex-image-output', component: 'CodexImageOutput', mode: 'card' },
   { name: 'tool.call.toolview', key: 'codex_image_generate', component: 'CodexImageToolRow', mode: 'card' },
   { name: 'shell.overlay', id: 'codex-subscription-image-viewer', component: 'DeferredImageViewer', mode: 'viewer' },
+  // Codex's enhanced previews replace the host gallery at priority -10; wrap them so
+  // user-sent and tool images keep a menu. Keyless entries are matched by component.
+  { name: 'conversation.chat.user.images', component: 'MessageImagePreviews', mode: 'gallery' },
+  { name: 'conversation.chat.message.images', component: 'MessageImagePreviews', mode: 'gallery' },
+  { name: 'tool.call.images', component: 'MessageImagePreviews', mode: 'gallery' },
+  { name: 'conversation.trajectory.images', component: 'MessageImagePreviews', mode: 'gallery' },
 ];
 const COPY = {
   zh: { open: '在新标签页中打开图像', add: '添加到聊天', copy: '复制图像', reveal: '在资源管理器中打开', revealMac: '在 Finder 中显示', download: '下载副本', image: '图片', loading: '正在读取原图…', failed: '图片操作失败，请重试', added: '已添加到聊天', copied: '已复制图像', saved: '已下载副本', requested: '已开始下载', popup: '请允许弹出窗口后重试', unavailable: '原图或来源信息不可用' },
@@ -140,23 +146,77 @@ function viewerComponent(Original, runtime) {
   };
 }
 
+/** Resolve one rendered gallery image to its durable attachment, preferring the observed URL. */
+function matchUserImage(props, root, urls, image, src) {
+  const images = Array.isArray(props?.images) ? props.images : [];
+  const owned = images.filter(item => item?.attachment && urls.get(item.attachment.attachmentId)?.has(src));
+  let attachment = owned.length === 1 ? owned[0].attachment : undefined;
+  if (!attachment) {
+    const rendered = typeof root?.querySelectorAll === 'function' ? [...root.querySelectorAll('img')] : [];
+    const index = rendered.indexOf(image);
+    if (index < 0 || rendered.length !== images.length) return undefined;
+    attachment = images[index]?.attachment;
+  }
+  return decodeUserImage({ sessionId: props?.sessionId, attachment });
+}
+
+/** Wrap the owned preview gallery without taking over its layout, zoom or retry behavior. */
+function galleryComponent(Original, runtime) {
+  return function ImageMenuGallery(props) {
+    const root = React.useRef(null);
+    const latest = React.useRef(props);
+    latest.current = props;
+    const generation = React.useSyncExternalStore(runtime.subscribeGeneration, runtime.getGeneration);
+    const urls = React.useMemo(() => new Map(), [generation]);
+    const loadImage = React.useCallback(async attachment => {
+      const src = await props.loadImage(attachment);
+      rememberUrl(urls, attachment?.attachmentId, src);
+      return src;
+    }, [props.loadImage, generation]);
+    const show = event => {
+      if (event.defaultPrevented || event.type === 'keydown' && !isMenuKey(event)) return;
+      const element = event.target;
+      if (!(element instanceof Element) || !root.current?.contains(element)) return;
+      const image = element.closest('img') ?? element.closest('button')?.querySelector('img');
+      if (!image || !root.current.contains(image)) return;
+      const src = sourceUrl(image);
+      if (!src) return;
+      const user = matchUserImage(latest.current, root.current, urls, image, src);
+      if (!user) return;
+      runtime.show({ user, src }, pointOf(event, image));
+      consume(event);
+    };
+    return jsx('div', { ref: root, style: { display: 'contents' }, onContextMenuCapture: show, onKeyDownCapture: show, children: jsx(Original, { ...props, loadImage }) });
+  };
+}
+
 /** Reconcile one shadowing entry; its own registration never becomes its source. */
 function installWrapper(ctx, spec, runtime) {
   return ctx.slots.inject(spec.name, () => {
     let source, dispose, stopped = false, reconciling = false;
     const wrappers = new Set();
+    const owns = entry => spec.key ? entry.options?.key === spec.key
+      : spec.id ? entry.options?.id === spec.id
+      : entry.options?.key === undefined && entry.options?.id === undefined;
     const sync = () => {
       if (stopped || reconciling) return;
-      const candidates = ctx.slots.entries(spec.name).filter(entry => !wrappers.has(entry.component) && (spec.key ? entry.options?.key === spec.key : entry.options?.id === spec.id) && entry.component?.name === spec.component && !entry.children && !entry.store);
+      const candidates = ctx.slots.entries(spec.name).filter(entry => !wrappers.has(entry.component) && owns(entry) && entry.component?.name === spec.component && !entry.children && !entry.store);
       const next = candidates.length === 1 ? candidates[0] : undefined;
       if (next === source && (next === undefined || dispose)) return;
       reconciling = true;
       try {
         dispose?.(); dispose = undefined; source = next;
         if (next) {
-          const Component = spec.mode === 'viewer' ? viewerComponent(next.component, runtime) : cardComponent(next.component, runtime);
+          const Component = spec.mode === 'viewer' ? viewerComponent(next.component, runtime)
+            : spec.mode === 'gallery' ? galleryComponent(next.component, runtime) : cardComponent(next.component, runtime);
           wrappers.add(Component);
-          dispose = ctx.slots.register({ name: spec.name, ...spec.key ? { key: spec.key } : { id: spec.id, order: 20 }, priority: (next.options?.priority ?? 0) - 20, ...next.locale ? { locale: next.locale } : {}, ...next.inject ? { inject: next.inject } : {} }, Component);
+          dispose = ctx.slots.register({
+            name: spec.name,
+            ...spec.key ? { key: spec.key } : spec.id ? { id: spec.id, order: 20 } : {},
+            priority: (next.options?.priority ?? 0) - 20,
+            ...next.locale ? { locale: next.locale } : {},
+            ...next.inject ? { inject: next.inject } : {},
+          }, Component);
         }
       } finally { reconciling = false; }
     };
@@ -180,6 +240,14 @@ function attachFiles(ctx, input, files, sessionId) {
 }
 function openSession(ctx, sessionId) { ctx.uiWorkspace.openSession(sessionId); }
 
+const EXTENSIONS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+function imageName(attachment) { return attachment.name ?? `image.${EXTENSIONS[attachment.mediaType] ?? 'img'}`; }
+function readBlob(runtime, target, signal) {
+  const user = decodeUserImage(target?.user);
+  if (user) return readUserImage(runtime.remoteSession, user.sessionId, user, { signal }).then(({ bytes, attachment }) => new Blob([bytes], { type: attachment.mediaType }));
+  return readOriginal(runtime.rpc, target?.sessionId, target?.original, { signal }).then(data => new Blob([data], { type: 'image/png' }));
+}
+
 function OriginalImageTab({ useTabInfo, runtime, t }) {
   const { tab } = useTabInfo();
   const target = tab.navigation.params;
@@ -190,19 +258,21 @@ function OriginalImageTab({ useTabInfo, runtime, t }) {
     const signal = AbortSignal.any([controller.signal, runtime.operationSignal()]);
     let url;
     setState({});
-    readOriginal(runtime.rpc, target?.sessionId, target?.original, { signal }).then(data => {
+    readBlob(runtime, target, signal).then(blob => {
       signal.throwIfAborted();
-      url = URL.createObjectURL(new Blob([data], { type: 'image/png' }));
+      url = URL.createObjectURL(blob);
       setState({ url });
     }).catch(() => { if (!signal.aborted) setState({ failed: true }); });
     return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
   }, [target, runtime, generation]);
   const show = event => {
-    if (event.defaultPrevented || event.type === 'keydown' && !isMenuKey(event) || !state.url || !decodeOriginal(target?.original)) return;
+    if (event.defaultPrevented || event.type === 'keydown' && !isMenuKey(event) || !state.url) return;
+    if (!decodeUserImage(target?.user) && !decodeOriginal(target?.original)) return;
     runtime.show({ ...target, src: state.url }, pointOf(event, event.currentTarget));
     consume(event);
   };
-  return jsx('div', { style: { display: 'grid', placeItems: 'center', width: '100%', height: '100%', overflow: 'auto', background: 'var(--dsw-alias-bg-base)' }, children: state.url ? jsx('img', { src: state.url, alt: target.original.name, tabIndex: 0, onContextMenu: show, onKeyDown: show, style: { display: 'block', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' } }) : jsx('span', { role: 'status', children: t(state.failed ? 'failed' : 'loading') }) });
+  const alt = decodeUserImage(target?.user)?.attachment.name ?? target?.original?.name ?? t('image');
+  return jsx('div', { style: { display: 'grid', placeItems: 'center', width: '100%', height: '100%', overflow: 'auto', background: 'var(--dsw-alias-bg-base)' }, children: state.url ? jsx('img', { src: state.url, alt, tabIndex: 0, onContextMenu: show, onKeyDown: show, style: { display: 'block', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' } }) : jsx('span', { role: 'status', children: t(state.failed ? 'failed' : 'loading') }) });
 }
 
 /** Own-menu keys must not also reach Codex 3.2.6's document-level viewer shortcuts. */
@@ -226,18 +296,26 @@ function installMenus(ctx, runtime, t) {
   const urls = new Set();
   ctx.effect(() => () => { for (const url of urls) URL.revokeObjectURL(url); urls.clear(); }, `${ID}: URLs`);
   return ctx.contextMenus.register({ id: `${ID}.actions`, target: MENU, order: 0, resolve: target => {
-    const original = decodeOriginal(target?.original);
-    if (!original || typeof target.sessionId !== 'string') return [];
+    const user = decodeUserImage(target?.user);
+    const original = user ? undefined : decodeOriginal(target?.original);
+    if (!user && !original) return [];
+    const sessionId = user ? user.sessionId : target.sessionId;
+    if (typeof sessionId !== 'string') return [];
     const operationSignal = runtime.operationSignal();
-    const read = signal => readOriginal(runtime.rpc, target.sessionId, original, { signal: signal ? AbortSignal.any([operationSignal, signal]) : operationSignal }).then(data => new Blob([data], { type: 'image/png' }));
-    const localPath = typeof target.localPath === 'string' ? localPathFromBlock({ meta: { kind: 'codex-subscription-image', schemaVersion: 1, original }, content: [{ type: 'text', text: `Original PNG saved on the DSH host at: ${JSON.stringify(target.localPath)}.` }] }, original) : undefined;
-    const file = { url: target.src, name: original.name, mediaType: 'image/png', read };
+    const scoped = signal => signal ? AbortSignal.any([operationSignal, signal]) : operationSignal;
+    const read = signal => user
+      ? readUserImage(runtime.remoteSession, sessionId, user, { signal: scoped(signal) }).then(({ bytes, attachment }) => new Blob([bytes], { type: attachment.mediaType }))
+      : readOriginal(runtime.rpc, sessionId, original, { signal: scoped(signal) }).then(data => new Blob([data], { type: 'image/png' }));
+    const localPath = !user && typeof target.localPath === 'string' ? localPathFromBlock({ meta: { kind: 'codex-subscription-image', schemaVersion: 1, original }, content: [{ type: 'text', text: `Original PNG saved on the DSH host at: ${JSON.stringify(target.localPath)}.` }] }, original) : undefined;
+    const mediaType = user ? user.attachment.mediaType : 'image/png';
+    const name = user ? imageName(user.attachment) : original.name;
+    const file = { url: target.src, name, mediaType, read };
     const item = (id, run, disabled = false) => ({ id, label: t(id === 'reveal' && document.documentElement.dataset.platform === 'darwin' ? 'revealMac' : id), failureLabel: t('failed'), disabled, run });
     return [
       item('open', async () => {
-        if (window.dshDesktop) return withSession(ctx, target.sessionId, async () => {
+        if (window.dshDesktop) return withSession(ctx, sessionId, async () => {
           operationSignal.throwIfAborted();
-          openSession(ctx, target.sessionId);
+          openSession(ctx, sessionId);
           ctx.sidebarRight.openTab(TAB, { params: target });
           runtime.closeViewers();
         });
@@ -254,10 +332,10 @@ function installMenus(ctx, runtime, t) {
       item('add', async () => {
         const blob = await read();
         operationSignal.throwIfAborted();
-        await withSession(ctx, target.sessionId, async actx => {
+        await withSession(ctx, sessionId, async actx => {
           operationSignal.throwIfAborted();
-          attachFiles(ctx, ctx.conversation.input.for(actx), [new File([blob], original.name, { type: 'image/png' })], target.sessionId);
-          openSession(ctx, target.sessionId);
+          attachFiles(ctx, ctx.conversation.input.for(actx), [new File([blob], name, { type: mediaType })], sessionId);
+          openSession(ctx, sessionId);
           runtime.closeViewers();
         });
         ctx.contextMenus.notify(t('added'), true);
@@ -272,7 +350,7 @@ function installMenus(ctx, runtime, t) {
   } });
 }
 
-export const inject = ['slots', 'locale', 'connection', 'sessions', 'conversation', 'uiWorkspace', 'remote.session', 'contextMenus', 'fileActions', 'sidebarRight', 'sidebarRightTabs'];
+export const inject = ['slots', 'locale', 'connection', 'sessions', 'conversation', 'uiWorkspace', 'remote', 'remote.session', 'contextMenus', 'fileActions', 'sidebarRight', 'sidebarRightTabs'];
 export function apply(ctx) {
   const lifetime = new AbortController();
   const catalog = new Catalog();
@@ -283,12 +361,14 @@ export function apply(ctx) {
     if (channel !== '/codex-subscription' || endpoint !== 'image/original/chunk') throw new Error('Unsupported image request');
     return ctx.connection.rpc.call('/api', 'codex-subscription/image/original/chunk', payload, signal);
   } };
-  const runtime = { lifetime, catalog, rpc, viewers, viewerOpen: false,
+  const runtime = { lifetime, catalog, rpc, viewers, viewerOpen: false, remoteSession: ctx.remote.session,
     getGeneration: () => generation,
     subscribeGeneration: callback => { generationListeners.add(callback); return () => generationListeners.delete(callback); },
     operationSignal: () => AbortSignal.any([lifetime.signal, connectionLifetime.signal]),
     show: (target, point) => {
-    if (!lifetime.signal.aborted && decodeOriginal(target?.original)) ctx.contextMenus.open({ kind: MENU, value: target }, point);
+    if (lifetime.signal.aborted) return;
+    if (target?.user ? !decodeUserImage(target.user) : !decodeOriginal(target?.original)) return;
+    ctx.contextMenus.open({ kind: MENU, value: target }, point);
   }, closeViewers: () => { for (const viewer of viewers) viewer.close(); } };
   ctx.effect(() => ctx.locale.register(ID, COPY), `${ID}: locale`);
   const t = ctx.locale.bind(ID);

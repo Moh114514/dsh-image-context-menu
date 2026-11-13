@@ -30,6 +30,15 @@ expect(client.includes('key: "codex_image_generate"'), 'codex_image_generate too
 expect(client.includes('name: "shell.overlay"'), 'shell.overlay slot moved');
 expect(client.includes('id: "codex-subscription-image-viewer"'), 'viewer overlay id moved');
 
+// 1b. Enhanced previews shadow the host gallery; user-sent images lose their menu without us.
+for (const slot of ['conversation.chat.user.images', 'conversation.chat.message.images', 'tool.call.images', 'conversation.trajectory.images']) {
+  expect(client.includes(`["${slot}", MessageImagePreviews]`), `enhanced preview slot moved: ${slot}`);
+}
+expect(/\["conversation.chat.user.images", MessageImagePreviews\]/.test(client) && client.includes('priority: -10'), 'enhanced preview priority changed');
+expect(client.includes('function MessageImagePreviews('), 'MessageImagePreviews component renamed');
+expect(client.includes('className: "codexMessageImages"'), 'preview gallery class moved');
+expect(client.includes('className: "codexImageThumb"'), 'preview thumbnail class moved');
+
 // 2. DOM surfaces the adapter looks for.
 expect(client.includes('codexGeneratedImageFrame'), 'card frame class moved');
 for (const token of ['dcsiv-root', 'dcsiv-surface', 'dcsiv-stage', 'dcsiv-image']) {

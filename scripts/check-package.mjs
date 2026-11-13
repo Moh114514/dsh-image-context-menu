@@ -6,7 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => readFile(resolve(root, name), 'utf8');
 const pkg = JSON.parse(await read('package.json'));
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
-expect(pkg.name === 'dsh-image-context-menu' && pkg.version === '0.1.2', 'Unexpected package identity');
+expect(pkg.name === 'dsh-image-context-menu' && pkg.version === '0.1.3', 'Unexpected package identity');
 expect(pkg.private !== true && pkg.license === 'MIT', 'Publication manifest is not public MIT');
 expect(pkg.dsh?.bundle?.patch === './cordis.patch.yml', 'Missing installable bundle patch');
 expect(pkg.exports?.['./client'] === './lib/client.js', 'Missing built browser export');

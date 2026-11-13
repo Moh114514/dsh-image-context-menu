@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   decodeOriginal, sameOriginal, originalFromBlock, localPathFromBlock,
   collectGeneratedItems, readOriginal, Catalog, matchViewerImage,
+  decodeUserImage, readUserImage,
 } from '../src/core.js';
 
 const CHUNK = 4 * 1024 * 1024;
@@ -201,4 +202,54 @@ test('viewer ambiguity and malformed or unowned images fail closed', () => {
   ])), undefined);
   assert.equal(matchViewerImage(null, 'blob:shared', catalog), undefined);
   assert.equal(matchViewerImage({ ...request, items: [{ id: 'absent', src: 'blob:shared' }] }, 'blob:shared', catalog), undefined);
+});
+
+const userPayload = Buffer.from('user-sent image bytes');
+const userAttachment = {
+  attachmentId: 'sha256:' + createHash('sha256').update(userPayload).digest('hex'),
+  mediaType: 'image/png', bytes: userPayload.length, width: 4, height: 5, name: 'upload.png',
+};
+
+test('user-sent image references require a complete, bounded durable descriptor', () => {
+  assert.deepEqual(decodeUserImage({ sessionId: 'session-1', attachment: userAttachment }), {
+    sessionId: 'session-1', attachment: userAttachment,
+  });
+  assert.equal(decodeUserImage({ sessionId: 'session-1', attachment: { ...userAttachment, name: 'bad name.png' } }).attachment.name, undefined);
+  for (const invalid of [
+    undefined, null, {}, { sessionId: 'session-1' }, { sessionId: '', attachment: userAttachment },
+    { sessionId: 'session-1', attachment: { ...userAttachment, attachmentId: '' } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, mediaType: 'text/plain' } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, mediaType: undefined } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, bytes: 0 } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, width: 0 } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, height: -1 } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, bytes: 49 * 1024 * 1024 } },
+    { sessionId: 'session-1', attachment: { ...userAttachment, width: 20_000, height: 20_000 } },
+  ]) assert.equal(decodeUserImage(invalid), undefined, JSON.stringify(invalid));
+});
+
+test('user-sent image reader verifies the gateway reference, length and stored digest', async () => {
+  const calls = [];
+  const remote = { async attachment(request) {
+    calls.push(request);
+    return { ok: true, value: { attachment: userAttachment, data: userPayload.toString('base64') } };
+  } };
+  const read = await readUserImage(remote, 'session-1', { attachment: userAttachment });
+  assert.deepEqual(Buffer.from(read.bytes), userPayload);
+  assert.deepEqual(read.attachment, userAttachment);
+  assert.deepEqual(calls, [{ sessionId: 'session-1', attachment: userAttachment }]);
+
+  const reject = (value, pattern) => assert.rejects(
+    readUserImage({ async attachment() { return value; } }, 'session-1', { attachment: userAttachment }), pattern);
+  await reject({ ok: false, error: { code: 'attachment/missing', message: 'gone' } }, /unavailable/u);
+  await reject({ ok: true, value: { attachment: { ...userAttachment, attachmentId: 'sha256:' + 'e'.repeat(64) },
+    data: userPayload.toString('base64') } }, /metadata changed/u);
+  await reject({ ok: true, value: { attachment: userAttachment, data: Buffer.from('short').toString('base64') } }, /integrity/u);
+  const tampered = Buffer.from(userPayload); tampered[0] ^= 0xff;
+  await reject({ ok: true, value: { attachment: userAttachment, data: tampered.toString('base64') } }, /integrity/u);
+  await assert.rejects(readUserImage({}, 'session-1', { attachment: userAttachment }), /Invalid image request/u);
+  await assert.rejects(readUserImage(remote, 'session-1', { attachment: { ...userAttachment, bytes: 0 } }), /Invalid image request/u);
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(readUserImage(remote, 'session-1', { attachment: userAttachment }, { signal: controller.signal }),
+    { name: 'AbortError' });
 });

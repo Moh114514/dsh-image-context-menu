@@ -74,6 +74,11 @@ class ElementStub {
     for (const child of this.children) { if (child.matches(selector)) return child; const nested = child.querySelector(selector); if (nested) return nested; }
     return undefined;
   }
+  querySelectorAll(selector) {
+    const found = [];
+    for (const child of this.children) { if (child.matches(selector)) found.push(child); found.push(...child.querySelectorAll(selector)); }
+    return found;
+  }
   getBoundingClientRect() { return { left: 10, bottom: 20 }; }
 }
 function eventHub() {
@@ -107,7 +112,7 @@ function loadAdapter() {
   let text = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
   const marker = 'return { apply, inject };';
   assert.equal(text.split(marker).length, 2, 'Built client exposes one known module return seam');
-  text = text.replace(marker, 'return { apply, inject, __test: { installWrapper, viewerFacade, cardComponent, viewerComponent, attachFiles, withSession, installViewerKeyGuard, installMenus } };');
+  text = text.replace(marker, 'return { apply, inject, __test: { installWrapper, viewerFacade, cardComponent, viewerComponent, galleryComponent, matchUserImage, attachFiles, withSession, installViewerKeyGuard, installMenus, readUserImage } };');
   vm.runInNewContext(text, context, { filename: 'client.adapter-test.in-memory.js' });
   assert.equal(definition.id, 'dsh-image-context-menu');
   const exports = definition.factory(id => {
@@ -507,5 +512,100 @@ test('Add aborts during suspended controllerOperation readiness after reading an
   assert.equal(attachments, 0);
   assert.equal(navigations, 0);
   assert.equal(notices, 0);
+  stop(); for (const dispose of disposers.reverse()) dispose();
+});
+
+const userBytes = Buffer.from('user-sent image bytes');
+const userRef = { attachmentId: 'sha256:' + createHash('sha256').update(userBytes).digest('hex'),
+  mediaType: 'image/png', bytes: userBytes.length, width: 4, height: 5, name: 'upload.png' };
+
+test('keyless enhanced previews are wrapped below their own priority and keep the upstream inject', async () => {
+  const adapter = loadAdapter(), slots = slotStub(), name = 'conversation.chat.user.images';
+  slots.declare(name);
+  const inject = () => ({ sessionId: 'session-1' });
+  const original = named('MessageImagePreviews');
+  const remove = slots.register({ name, priority: -10, inject }, original);
+  const stop = adapter.installWrapper({ slots }, { name, component: 'MessageImagePreviews', mode: 'gallery' }, runtimeStub().runtime);
+  await flush();
+  const rows = slots.entries(name);
+  assert.equal(rows.length, 2);
+  const wrapper = rows.find(entry => entry.component !== original);
+  assert.equal(wrapper.options.name, name);
+  assert.equal(wrapper.options.priority, -30);
+  assert.equal(wrapper.options.key, undefined);
+  assert.equal(wrapper.options.id, undefined);
+  assert.equal(wrapper.inject, inject, 'Renderer, not wrapper, must execute/bind upstream inject');
+  remove(); await flush();
+  assert.equal(slots.entries(name).length, 0);
+  stop();
+});
+
+test('gallery wrapper maps the rendered thumbnail to its durable attachment before opening our menu', async () => {
+  const adapter = loadAdapter(), { runtime } = runtimeStub();
+  const Original = named('MessageImagePreviews');
+  const runner = adapter.hooks.runner(adapter.galleryComponent(Original, runtime));
+  const first = new ElementStub('img'); first.src = 'blob:first';
+  const second = new ElementStub('img'); second.src = 'blob:second';
+  const root = new ElementStub('div', '', [new ElementStub('button', 'codexImageThumb', [first]), new ElementStub('button', 'codexImageThumb', [second])]);
+  const other = { attachmentId: 'sha256:' + 'f'.repeat(64), mediaType: 'image/jpeg', bytes: 2, width: 1, height: 1 };
+  const props = { sessionId: 'session-1', images: [{ attachment: userRef }, { attachment: other }],
+    loadImage: async attachment => attachment === userRef ? 'blob:first' : 'blob:second' };
+  const rendered = runner.render(props, root);
+  assert.equal(rendered.props.children.type, Original);
+  await rendered.props.children.props.loadImage(userRef);
+  await rendered.props.children.props.loadImage(other);
+  rendered.props.onContextMenuCapture(eventFor(first));
+  assert.equal(runtime.shown.length, 1);
+  assert.equal(runtime.shown[0].target.user.attachment.attachmentId, userRef.attachmentId);
+  assert.equal(runtime.shown[0].target.src, 'blob:first');
+  rendered.props.onKeyDownCapture(eventFor(root.children[1], { type: 'keydown', key: 'ContextMenu' }));
+  assert.equal(runtime.shown.length, 2);
+  assert.equal(runtime.shown[1].target.user.attachment.attachmentId, other.attachmentId);
+  second.src = 'blob:remapped';
+  rendered.props.onContextMenuCapture(eventFor(second));
+  assert.equal(runtime.shown.length, 3);
+  assert.equal(runtime.shown[2].target.user.attachment.attachmentId, other.attachmentId);
+  rendered.props.onContextMenuCapture(eventFor(new ElementStub('img')));
+  rendered.props.onKeyDownCapture(eventFor(second, { type: 'keydown', key: 'Enter' }));
+  assert.equal(runtime.shown.length, 3);
+  rendered.props.onContextMenuCapture(eventFor(first, { defaultPrevented: true }));
+  assert.equal(runtime.shown.length, 3);
+  runner.unmount();
+});
+
+test('menu provider serves user-sent images through the verified durable attachment read', async () => {
+  const adapter = loadAdapter(), { runtime } = runtimeStub();
+  let provider, requests = [], blobs = [];
+  runtime.remoteSession = { async attachment(request) {
+    requests.push(request);
+    return { ok: true, value: { attachment: userRef, data: userBytes.toString('base64') } };
+  } };
+  const disposers = [];
+  const ctx = {
+    effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose); return dispose; },
+    contextMenus: { register(value) { provider = value; return () => {}; }, notify() {} },
+    fileActions: {
+      async copyImage(source) { blobs.push(await source.read()); },
+      async save(source, mode) { assert.equal(mode, 'download'); blobs.push(await source.read()); return { status: 'requested' }; },
+    },
+  };
+  const stop = adapter.installMenus(ctx, runtime, key => key);
+  assert.equal(provider.resolve({ user: { sessionId: 'session-1', attachment: { ...userRef, bytes: 0 } }, src: 'blob:user' }).length, 0);
+  assert.equal(provider.resolve({ user: { sessionId: '', attachment: userRef }, src: 'blob:user' }).length, 0);
+  const actions = provider.resolve({ user: { sessionId: 'session-1', attachment: userRef }, src: 'blob:user' });
+  assert.deepEqual(Array.from(actions, action => action.id), ['open', 'add', 'copy', 'reveal', 'download']);
+  assert.equal(actions.find(action => action.id === 'reveal').disabled, true, 'No host path is known for an uploaded image');
+  await actions.find(action => action.id === 'copy').run();
+  await actions.find(action => action.id === 'download').run();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].sessionId, 'session-1');
+  assert.equal(requests[0].attachment.attachmentId, userRef.attachmentId);
+  assert.equal(requests[0].attachment.mediaType, userRef.mediaType);
+  assert.equal(requests[0].attachment.bytes, userRef.bytes);
+  assert.equal(requests[0].attachment.name, userRef.name);
+  for (const blob of blobs) { assert.equal(blob.type, 'image/png'); assert.deepEqual(Buffer.from(await blob.arrayBuffer()), userBytes); }
+  runtime.remoteSession = { async attachment() { return { ok: false, error: { code: 'attachment/missing', message: 'gone' } }; } };
+  await assert.rejects(provider.resolve({ user: { sessionId: 'session-1', attachment: userRef }, src: 'blob:user' })
+    .find(action => action.id === 'copy').run(), /unavailable/u);
   stop(); for (const dispose of disposers.reverse()) dispose();
 });

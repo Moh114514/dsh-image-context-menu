@@ -1,14 +1,25 @@
 {
   "name": "dsh-image-context-menu",
-  "version": "0.1.2",
-  "description": "Original-image context menus for Codex-generated images in DeepSeek Harness.",
+  "version": "0.1.3",
+  "description": "Original-image context menus for Codex-generated and user-sent images in DeepSeek Harness.",
   "type": "module",
   "license": "MIT",
   "author": "Moh114514",
-  "repository": { "type": "git", "url": "git+https://github.com/Moh114514/dsh-image-context-menu.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Moh114514/dsh-image-context-menu.git"
+  },
   "homepage": "https://github.com/Moh114514/dsh-image-context-menu#readme",
-  "bugs": { "url": "https://github.com/Moh114514/dsh-image-context-menu/issues" },
-  "keywords": ["dsh-plugin", "deepseek-harness", "image", "context-menu", "codex"],
+  "bugs": {
+    "url": "https://github.com/Moh114514/dsh-image-context-menu/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "image",
+    "context-menu",
+    "codex"
+  ],
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -18,13 +29,27 @@
     "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
-  "files": ["lib/*.js", "locale/*.json", "cordis.patch.yml", "icon.svg", "README.md", "README.zh.md", "PUBLISHING.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"],
+  "files": [
+    "lib/*.js",
+    "locale/*.json",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "README.zh.md",
+    "PUBLISHING.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test --test-isolation=none test/*.test.mjs",
     "check": "node scripts/build.mjs && node --test --test-isolation=none test/*.test.mjs && node scripts/check-package.mjs"
   },
-  "engines": { "node": "^22.19.0 || >=24.0.0", "dsh": ">=0.2.2-rc.1 <0.2.3-0" },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.2-rc.1 <0.2.3-0"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",
     "@deepseek-ai/dsh-client-connection": ">=0.2.2-rc.1 <0.2.3-0",
@@ -36,10 +61,16 @@
     "dsh-codex-subscription": ">=3.2.6 <3.3.0",
     "react": "^18.3.1"
   },
-  "peerDependenciesMeta": { "react": { "optional": true } },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "icon": "./icon.svg",
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -53,5 +84,8 @@
       ]
     }
   },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" }
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
 
-- Declare a storefront screenshot in `screenshots.json` and show it in both READMEs: a real capture of the five-item menu on Harness 0.2.2-rc.1 with dsh-codex-subscription 3.2.10. No code change, so no new release.
-- `scripts/check-package.mjs` now validates that file (1-8 entries, relative PNG/JPEG/WebP paths that exist and are non-empty).
+- Right-click menus for **images you send yourself**: the companion now shadows Codex's enhanced previews on `conversation.chat.user.images`, `conversation.chat.message.images`, `tool.call.images` and `conversation.trajectory.images` one priority layer above them, so those galleries get the same five actions while the upstream component keeps rendering every preview.
+- User images are read through the session's attachment RPC (`remote.session.attachment`) and validated by media type, byte size and dimensions, plus SHA-256 whenever the attachment id is a digest. Reveal stays disabled for them because an attachment carries no host path.
+- Fix activation on hosts that expose the remote service without the nested one: `inject` now declares `remote` next to `remote.session`, which previously threw `cannot get property "remote" without inject` during apply.
+- `scripts/check-codex-contract.mjs` also verifies the four keyless preview slots, their `-10` priority and the `codexMessageImages`/`codexImageThumb` classes.
+- Declare a storefront screenshot in `screenshots.json` and show it in both READMEs: a real capture of the five-item menu on Harness 0.2.2-rc.1 with dsh-codex-subscription 3.2.10. `scripts/check-package.mjs` validates that file (1-8 entries, relative PNG/JPEG/WebP paths that exist and are non-empty).
 
 ## 0.1.2
 
